@@ -9,10 +9,10 @@
 ## 安装
 
 ```bash
-pnpm install
-pnpm build
-pnpm link --global  # 之后可在任意目录使用 zentao 命令
+npm install -g @zhangwanli/zentao-cli
 ```
+
+需要 Node.js 20 及以上。安装后提供 `zentao` 命令。禅道官方的 npm 包 `zentao-cli` 也提供同名命令，两者不要同时全局安装，否则会互相覆盖。
 
 ## 配置
 
@@ -88,6 +88,9 @@ zentao raw bug view bugID=101        # 调试：查看原始 JSON
 ## 开发
 
 ```bash
+pnpm install
+pnpm build
+pnpm link --global # 用本地源码构建的 zentao 命令
 pnpm dev bug 101   # 用 tsx 直接运行源码
 pnpm test          # vitest
 pnpm typecheck
