@@ -12,7 +12,7 @@
 npm install -g @zhangwanli/zentao-cli
 ```
 
-需要 Node.js 20 及以上。安装后提供 `zentao` 命令。禅道官方的 npm 包 `zentao-cli` 也提供同名命令，两者不要同时全局安装，否则会互相覆盖。
+需要 Node.js 22.12 及以上。安装后提供 `zentao` 命令。禅道官方的 npm 包 `zentao-cli` 也提供同名命令，两者不要同时全局安装，否则会互相覆盖。
 
 ## 配置
 
