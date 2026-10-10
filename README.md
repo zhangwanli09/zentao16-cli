@@ -1,10 +1,10 @@
 # zentao-cli
 
-这个命令行工具让开发者和 coding agent（如 Claude Code）直接读写禅道单据。适用于所有自行部署的禅道开源版 16.x：不依赖特定服务器或部署方式，只需要一个能登录网页版的禅道账号。
+这个命令行工具让开发者和 coding agent 直接读写禅道单据。适用于所有自行部署的禅道开源版 16.x：不依赖特定服务器或部署方式，只需要一个能登录网页版的禅道账号。
 
 - 读单据：Bug、需求、任务的详情会输出成 Markdown，包含历史备注和关联信息。正文和备注里的截图、附件会下载到本地，Markdown 中引用的就是这些本地文件，agent 可以直接读图。
-- 写单据：可以追加备注、解决 Bug。提交后工具会回读禅道，确认确实写进去了。
-- 认证方式：使用网页会话，即旧版 JSON 接口 `index.php?m=...&f=...&t=json`。会话缓存在 `~/.zentao/`，失效时自动重新登录。
+- 写单据：可以追加备注、指派和解决 Bug。提交后工具会回读禅道，确认确实写进去了。
+- 认证方式：用网页版账号密码登录获取会话，再调用旧版 JSON 接口 `index.php?m=...&f=...&t=json`。会话缓存在 `~/.zentao/`，失效时自动重新登录。
 
 ## 安装
 
@@ -24,8 +24,11 @@ npm install -g @zhangwanli/zentao-cli
 | `ZENTAO_ACCOUNT` | 账号（建议使用专用账号，只分配需要的权限） |
 | `ZENTAO_PASSWORD` | 密码 |
 | `ZENTAO_HOME` | 可选，配置和会话缓存目录，默认 `~/.zentao` |
+| `ZENTAO_READONLY` | 可选，设为 `1` 开启只读模式，见下文 |
 
-如需把单据对应到本地代码仓库，可在 `~/.zentao/repos.json` 中配置。查找时先按模块匹配（从最深一级往上找），找不到再按产品匹配：
+只读模式：设置 `ZENTAO_READONLY=1`，或创建空文件 `~/.zentao/readonly`，之后 `comment`、`assign`、`resolve` 和 `raw` 会直接拒绝执行（`raw` 能发任意 GET 请求，禅道有些 GET 会改数据）。适合评测、演示，或只想让 agent 读单子的场景。
+
+如需把单据对应到本地代码仓库，可在 `~/.zentao/repos.json` 中配置，单据详情里会多输出一行"对应仓库"，告诉 agent 该去哪个目录改代码。查找时先按模块匹配（从最深一级往上找），找不到再按产品匹配：
 
 ```json
 {
@@ -38,21 +41,24 @@ npm install -g @zhangwanli/zentao-cli
 
 ```bash
 zentao login                         # 验证配置
-zentao my -t bug -s active           # 指派给我的激活 Bug
+zentao my -t bug -s active           # 指派给我的激活 Bug（最多取 200 条）
 zentao bug 101                       # Bug 详情（Markdown），图片下载到 .zentao/bug-101/
+zentao bug 101 -o tmp/zentao         # 指定图片和附件的保存目录
 zentao story 45 --no-download        # 需求详情，不下载附件
 zentao task 88 --json                # 任何命令都可以加 --json 输出结构化数据
 
-zentao comment bug 101 -f note.md    # 追加备注（Markdown，自动转为富文本）
+zentao comment bug 101 -f note.md    # 追加备注（Markdown，自动转为富文本；-f - 从标准输入读）
 zentao assign 101 -u dev1 -f note.md # 指派 Bug 并写备注（-u 填账号或姓名）
 zentao resolve 101 -r fixed -b trunk -m "修复验证码缓存问题，见 commit abc123"
 
 zentao raw bug view bugID=101        # 调试：查看原始 JSON
 ```
 
-退出码：`0` 成功，`1` 一般错误，`2` 单据不存在，`3` 认证、权限或配置问题。
+完整参数见 `zentao <命令> --help`（如 `resolve` 还支持 `-a` 解决后指派、`--duplicate` 指定重复的 Bug）。
 
-只读模式：设置环境变量 `ZENTAO_READONLY=1`，或创建空文件 `~/.zentao/readonly`，之后 `comment`、`assign`、`resolve` 和 `raw` 会直接拒绝执行（`raw` 能发任意 GET 请求，禅道有些 GET 会改数据）。适合评测、演示，或只想让 agent 读单子的场景。
+下载目录（默认 `.zentao/`）中会自动生成 `.gitignore`，下载的文件不会被提交到代码库。
+
+退出码：`0` 成功，`1` 一般错误，`2` 单据不存在，`3` 认证、权限或配置问题。
 
 ### 兼容性说明
 
@@ -72,18 +78,6 @@ zentao raw bug view bugID=101        # 调试：查看原始 JSON
 - HTTPS 用的是自签名证书或内部 CA 时，设置 `NODE_EXTRA_CA_CERTS=<CA 证书路径>`，不建议直接关闭证书校验。
 - 需要经代理访问禅道时，注意 Node 默认不读取 `HTTP_PROXY`/`HTTPS_PROXY`；Node 版本支持的话，设置 `NODE_USE_ENV_PROXY=1` 即可。
 - 登录用的是网页版的账号密码表单。如果登录额外加了验证（验证码、单点登录、二次认证等插件），命令行会登录失败，需要请管理员为工具开一个不走这些验证的账号。
-
-下载目录 `.zentao/` 中会自动生成 `.gitignore`，下载的文件不会被提交到代码库。
-
-## 在 Claude Code 中放行只读命令
-
-在 `settings.json` 的 `permissions.allow` 中加入以下规则：
-
-```json
-["Bash(zentao my:*)", "Bash(zentao bug:*)", "Bash(zentao story:*)", "Bash(zentao task:*)"]
-```
-
-`comment`、`assign`、`resolve`、`raw` 不要加入放行列表。前三个是写操作；`raw` 能请求任意接口，而禅道有些 GET 请求会修改数据。
 
 ## 开发
 
