@@ -1,0 +1,51 @@
+{
+  "title": "BUG #101 登录页验证码不刷新",
+  "bug": {
+    "id": "101",
+    "product": "3",
+    "module": "12",
+    "title": "登录页验证码不刷新",
+    "severity": "2",
+    "pri": "3",
+    "type": "codeerror",
+    "steps": "<p>[步骤]</p><p>1. 打开登录页<br />2. 点击验证码图片</p><p>[结果]</p><p>验证码没有变化</p><p><img src=\"/zentao/file-read-55.png\" alt=\"\" /></p><p>[期望]</p><p>点击后刷新验证码</p>",
+    "status": "active",
+    "confirmed": "0",
+    "openedBy": "tester1",
+    "openedDate": "2026-09-30 10:12:00",
+    "openedBuild": "7,trunk",
+    "assignedTo": "dev1",
+    "story": "45",
+    "storyTitle": "登录安全加固",
+    "task": "0",
+    "case": "0",
+    "deadline": "0000-00-00",
+    "os": "windows",
+    "browser": "chrome",
+    "resolution": "",
+    "files": {
+      "55": { "id": "55", "title": "截图 1.png", "extension": "png", "size": "20480" },
+      "56": { "id": "56", "title": "console.log", "extension": "log", "size": "512" }
+    }
+  },
+  "product": { "id": "3", "name": "会员中心" },
+  "modulePath": [
+    { "id": "10", "name": "账号" },
+    { "id": "12", "name": "登录" }
+  ],
+  "users": { "tester1": "测试甲", "dev1": "开发乙" },
+  "builds": { "7": "v2.3.0" },
+  "actions": {
+    "901": { "id": "901", "actor": "tester1", "action": "opened", "date": "2026-09-30 10:12:00", "comment": "", "extra": "", "history": [] },
+    "903": { "id": "903", "actor": "tester1", "action": "commented", "date": "2026-09-30 11:00:00", "comment": "<p>补充：只在 Chrome 无痕模式下出现</p><p><img src=\"{57.png}\" /></p>", "extra": "", "history": [] },
+    "902": {
+      "id": "902",
+      "actor": "pm1",
+      "action": "assigned",
+      "date": "2026-09-30 10:30:00",
+      "comment": "",
+      "extra": "dev1",
+      "history": [{ "field": "assignedTo", "old": "pm1", "new": "dev1" }]
+    }
+  }
+}

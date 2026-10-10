@@ -1,0 +1,33 @@
+{
+  "name": "zentao-cli",
+  "version": "0.1.0",
+  "description": "让开发者和 coding agent 读写禅道（开源版 16.x）单据的命令行工具",
+  "type": "module",
+  "bin": {
+    "zentao": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "marked": "^18.1.0",
+    "turndown": "^7.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/turndown": "^5.0.6",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
