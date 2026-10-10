@@ -9,9 +9,9 @@
 ## 安装
 
 ```bash
-npm install
-npm run build
-npm link        # 之后可在任意目录使用 zentao 命令
+pnpm install
+pnpm build
+pnpm link --global  # 之后可在任意目录使用 zentao 命令
 ```
 
 ## 配置
@@ -88,9 +88,9 @@ zentao raw bug view bugID=101        # 调试：查看原始 JSON
 ## 开发
 
 ```bash
-npm run dev -- bug 101   # 用 tsx 直接运行源码
-npm test                 # vitest
-npm run typecheck
+pnpm dev bug 101   # 用 tsx 直接运行源码
+pnpm test          # vitest
+pnpm typecheck
 ```
 
 测试数据 `test/fixtures/bug-view.json` 是按禅道 16.x 返回格式手工构造的。接入真实环境后，建议用脱敏后的真实返回替换。
