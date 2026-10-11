@@ -1,6 +1,6 @@
-# zentao-cli
+# zentao16-cli
 
-[![npm](https://img.shields.io/npm/v/@zhangwanli/zentao-cli)](https://www.npmjs.com/package/@zhangwanli/zentao-cli) [![node](https://img.shields.io/node/v/@zhangwanli/zentao-cli)](https://nodejs.org/) [![license](https://img.shields.io/npm/l/@zhangwanli/zentao-cli)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/zentao16-cli)](https://www.npmjs.com/package/zentao16-cli) [![node](https://img.shields.io/node/v/zentao16-cli)](https://nodejs.org/) [![license](https://img.shields.io/npm/l/zentao16-cli)](./LICENSE)
 
 让开发者和 coding agent 直接读写禅道单据的命令行工具。适用于自行部署的禅道开源版 16.x，只需要一个能登录网页版的账号。
 
@@ -11,7 +11,7 @@
 ## 安装
 
 ```bash
-npm install -g @zhangwanli/zentao-cli
+npm install -g zentao16-cli
 ```
 
 需要 Node.js 22.12+。禅道官方的 `zentao-cli` 包也提供 `zentao` 命令，不要同时全局安装。
@@ -91,7 +91,7 @@ pnpm test
 pnpm typecheck
 ```
 
-欢迎提 [Issue](https://github.com/zhangwanli09/zentao-cli/issues) 和 PR，提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/)。
+欢迎提 [Issue](https://github.com/zhangwanli09/zentao16-cli/issues) 和 PR，提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/)。
 
 ## 许可证
 
