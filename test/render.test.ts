@@ -36,24 +36,24 @@ describe('decodeAttr', () => {
 });
 
 describe('htmlToMarkdown', () => {
-  it('src 中的数字实体也能命中本地路径', () => {
+  it('src 中的数字实体也能命中本地路径', async () => {
     const html = '<img src="index.php?m=file&#38;f=read&#38;fileID=7">';
     const [src] = extractImageSources(html);
-    expect(htmlToMarkdown(html, new Map([[src, 'local/7.png']]))).toBe('![截图](local/7.png)');
+    expect(await htmlToMarkdown(html, new Map([[src, 'local/7.png']]))).toBe('![截图](local/7.png)');
   });
 
-  it('替换图片为本地路径，不转义方括号', () => {
-    const md = htmlToMarkdown('<p>[步骤]</p><p>1. 打开</p><p><img src="{2.png}"></p>', new Map([['{2.png}', '.zentao/bug-1/2-a.png']]));
+  it('替换图片为本地路径，不转义方括号', async () => {
+    const md = await htmlToMarkdown('<p>[步骤]</p><p>1. 打开</p><p><img src="{2.png}"></p>', new Map([['{2.png}', '.zentao/bug-1/2-a.png']]));
     expect(md).toContain('[步骤]');
     expect(md).toContain('![截图](.zentao/bug-1/2-a.png)');
   });
 
-  it('纯文本原样返回', () => {
-    expect(htmlToMarkdown('第一行\n第二行')).toBe('第一行\n第二行');
+  it('纯文本原样返回', async () => {
+    expect(await htmlToMarkdown('第一行\n第二行')).toBe('第一行\n第二行');
   });
 
-  it('空内容返回空串', () => {
-    expect(htmlToMarkdown(undefined)).toBe('');
-    expect(htmlToMarkdown('  ')).toBe('');
+  it('空内容返回空串', async () => {
+    expect(await htmlToMarkdown(undefined)).toBe('');
+    expect(await htmlToMarkdown('  ')).toBe('');
   });
 });

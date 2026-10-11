@@ -1,4 +1,3 @@
-import { marked } from 'marked';
 import type { Route } from './client.js';
 import { ZentaoError } from './errors.js';
 import { label, BUG_STATUS, RESOLUTION, RESOLUTION_CODES } from './labels.js';
@@ -9,22 +8,19 @@ export interface WriteClient extends ViewClient {
   post(route: Route, form: Record<string, string>): Promise<string>;
 }
 
-/** 禅道备注是富文本，把 agent 写的 Markdown 转成 HTML */
-function markdownToHtml(md: string): string {
-  return marked.parse(md, { async: false, gfm: true, breaks: true }) as string;
-}
-
 function now(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/** 备注 Markdown → HTML；未提供时为空串，提供了却是空白则报错 */
-function commentHtml(md: string | undefined): string {
+/** 禅道备注是富文本，把 agent 写的 Markdown 转成 HTML；未提供时为空串，提供了却是空白则报错 */
+async function commentHtml(md: string | undefined): Promise<string> {
   if (md === undefined) return '';
   if (!md.trim()) throw new ZentaoError('备注内容为空');
-  return markdownToHtml(md);
+  // 按需加载，不写备注的命令不必付出 marked 的启动开销
+  const { marked } = await import('marked');
+  return marked.parse(md, { gfm: true, breaks: true });
 }
 
 const actionIds = (view: RawView) => new Set(toList<RawAction>(view.actions).map((a) => String(a.id)));
@@ -33,7 +29,7 @@ const actionIds = (view: RawView) => new Set(toList<RawAction>(view.actions).map
 const newActions = (before: Set<string>, after: RawView) => toList<RawAction>(after.actions).filter((a) => !before.has(String(a.id)));
 
 export async function addComment(client: WriteClient, type: TicketType, id: number, markdown: string) {
-  const html = commentHtml(markdown);
+  const html = await commentHtml(markdown);
   const before = actionIds(await loadView(client, type, id));
 
   await client.post({ m: 'action', f: 'comment', args: [['objectType', type], ['objectID', id]] }, { actioncomment: html });
@@ -57,7 +53,7 @@ function resolveAccount(users: Record<string, string>, who: string): string {
 export async function assignBug(client: WriteClient, id: number, who: string, comment?: string) {
   who = who.trim();
   if (!who) throw new ZentaoError('请用 --user 指定账号或姓名');
-  const html = commentHtml(comment);
+  const html = await commentHtml(comment);
   const view = await loadView(client, 'bug', id);
   const users = view.users ?? {};
   const assignedTo = resolveAccount(users, who);
@@ -91,6 +87,7 @@ export async function resolveBug(client: WriteClient, id: number, opts: ResolveO
   }
   if (opts.resolution === 'duplicate' && !opts.duplicate) throw new ZentaoError('解决方案为 duplicate 时必须指定 --duplicate <bugId>');
   if (opts.resolution !== 'duplicate' && opts.duplicate) throw new ZentaoError('只有解决方案为 duplicate 时才能指定 --duplicate');
+  const comment = await commentHtml(opts.comment);
   const bug = (await loadView(client, 'bug', id)).bug!;
   if (bug.status !== 'active') {
     throw new ZentaoError(`Bug #${id} 当前状态为"${label(BUG_STATUS, bug.status)}"，只能解决激活状态的 Bug`);
@@ -101,7 +98,7 @@ export async function resolveBug(client: WriteClient, id: number, opts: ResolveO
     resolvedBuild: opts.build,
     resolvedDate: now(),
     assignedTo: opts.assign ?? String(bug.openedBy ?? ''),
-    comment: opts.comment ? markdownToHtml(opts.comment) : '',
+    comment,
   };
   if (opts.duplicate) form.duplicateBug = String(opts.duplicate);
 
