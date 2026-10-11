@@ -61,6 +61,14 @@ zentao raw bug view bugID=101        # 调试：查看原始 JSON
 - 下载目录会自动生成 `.gitignore`。
 - 退出码：`0` 成功，`1` 一般错误，`2` 单据不存在，`3` 认证、权限或配置问题。
 
+## Agent Skill
+
+仓库附带配套的 [Agent Skill](./skills/zentao/SKILL.md)，让 coding agent 按"读单子 → 梳理 → 澄清/开发 → 回写"的流程处理禅道单据：
+
+```bash
+npx skills add zhangwanli09/zentao16-cli
+```
+
 ## 兼容性
 
 在 16.5 上实测，其余 16.x 的旧版 JSON 接口相同。
