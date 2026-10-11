@@ -36,11 +36,14 @@ export function extractImageSources(html: string): string[] {
 /** 当前这次转换的图片映射；turndown 是同步的，所以共享一个实例是安全的 */
 let currentImageMap = new Map<string, string>();
 
-let td: TurndownService | undefined;
+let td: Promise<TurndownService> | undefined;
 
-/** 按需加载 turndown，不读单据的命令不必付出它的启动开销 */
-async function getTurndown(): Promise<TurndownService> {
-  if (td) return td;
+/** 按需加载 turndown，不读单据的命令不必付出它的启动开销；缓存 Promise，并发调用也只建一个实例 */
+function getTurndown(): Promise<TurndownService> {
+  return (td ??= createTurndown());
+}
+
+async function createTurndown(): Promise<TurndownService> {
   const { default: Turndown } = await import('turndown');
   const service = new Turndown({
     headingStyle: 'atx',
@@ -62,7 +65,7 @@ async function getTurndown(): Promise<TurndownService> {
       return `![${alt}](${/\s/.test(target) ? `<${target}>` : target})`;
     },
   });
-  return (td = service);
+  return service;
 }
 
 /** 禅道富文本 → Markdown，imageMap 把图片原始 src 替换成本地路径 */

@@ -35,7 +35,7 @@ describe('decodeAttr', () => {
   });
 });
 
-describe('htmlToMarkdown', async () => {
+describe('htmlToMarkdown', () => {
   it('src 中的数字实体也能命中本地路径', async () => {
     const html = '<img src="index.php?m=file&#38;f=read&#38;fileID=7">';
     const [src] = extractImageSources(html);

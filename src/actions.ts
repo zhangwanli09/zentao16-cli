@@ -8,24 +8,19 @@ export interface WriteClient extends ViewClient {
   post(route: Route, form: Record<string, string>): Promise<string>;
 }
 
-/** 禅道备注是富文本，把 agent 写的 Markdown 转成 HTML */
-async function markdownToHtml(md: string): Promise<string> {
-  // 按需加载，不写备注的命令不必付出 marked 的启动开销
-  const { marked } = await import('marked');
-  return marked.parse(md, { async: false, gfm: true, breaks: true }) as string;
-}
-
 function now(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/** 备注 Markdown → HTML；未提供时为空串，提供了却是空白则报错 */
+/** 禅道备注是富文本，把 agent 写的 Markdown 转成 HTML；未提供时为空串，提供了却是空白则报错 */
 async function commentHtml(md: string | undefined): Promise<string> {
   if (md === undefined) return '';
   if (!md.trim()) throw new ZentaoError('备注内容为空');
-  return markdownToHtml(md);
+  // 按需加载，不写备注的命令不必付出 marked 的启动开销
+  const { marked } = await import('marked');
+  return marked.parse(md, { gfm: true, breaks: true });
 }
 
 const actionIds = (view: RawView) => new Set(toList<RawAction>(view.actions).map((a) => String(a.id)));
@@ -92,6 +87,7 @@ export async function resolveBug(client: WriteClient, id: number, opts: ResolveO
   }
   if (opts.resolution === 'duplicate' && !opts.duplicate) throw new ZentaoError('解决方案为 duplicate 时必须指定 --duplicate <bugId>');
   if (opts.resolution !== 'duplicate' && opts.duplicate) throw new ZentaoError('只有解决方案为 duplicate 时才能指定 --duplicate');
+  const comment = await commentHtml(opts.comment);
   const bug = (await loadView(client, 'bug', id)).bug!;
   if (bug.status !== 'active') {
     throw new ZentaoError(`Bug #${id} 当前状态为"${label(BUG_STATUS, bug.status)}"，只能解决激活状态的 Bug`);
@@ -102,7 +98,7 @@ export async function resolveBug(client: WriteClient, id: number, opts: ResolveO
     resolvedBuild: opts.build,
     resolvedDate: now(),
     assignedTo: opts.assign ?? String(bug.openedBy ?? ''),
-    comment: opts.comment ? await markdownToHtml(opts.comment) : '',
+    comment,
   };
   if (opts.duplicate) form.duplicateBug = String(opts.duplicate);
 
