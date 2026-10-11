@@ -1,6 +1,6 @@
 {
   "name": "zentao16-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "让开发者和 coding agent 读写禅道（开源版 16.x）单据的命令行工具",
   "keywords": [
     "zentao",
