@@ -19,7 +19,7 @@ description: 通过 zentao 命令行（zentao16-cli）读写禅道开源版 16.x
 | `zentao resolve <id> -r fixed -b trunk -f -` | 解决 Bug（写操作，只能解决激活状态的 Bug），`-r` 可选 fixed/bydesign/duplicate/external/notrepro/postponed/willnotfix/tostory，`duplicate` 要同时用 `--duplicate <bugId>` 指定重复的 Bug，团队在禅道里自定义的解决方案代码要加 `--custom` |
 
 任何命令加 `--json` 可以得到结构化输出。不要用 `zentao raw`：它是给人调试用的，禅道部分 GET 请求也会改数据。退出码：`1` 一般错误，`2` 单据不存在，`3` 认证、权限或配置问题。遇到 `3` 时先看错误信息：
-- 配置或登录问题，请用户自己设置 `ZENTAO_URL`、`ZENTAO_ACCOUNT`、`ZENTAO_PASSWORD` 环境变量（或写在 `~/.zentao/config.json`），改好后用 `zentao login` 验证。不要让用户把密码贴到对话里。`ZENTAO_URL` 填错时错误信息里会给出应填的地址，原样转告用户。禅道登录加了验证码、单点登录等额外验证时命令行登录不了，需要管理员开一个不走这些验证的账号。证书、代理问题请用户参考 zentao16-cli README 的"部署环境"。
+- 配置或登录问题，请用户自己设置 `ZENTAO_URL`、`ZENTAO_ACCOUNT`、`ZENTAO_PASSWORD` 环境变量（或写在 `~/.zentao/config.json`），改好后用 `zentao login` 验证。不要让用户把密码贴到对话里。`ZENTAO_URL` 填错时错误信息里会给出应填的地址，原样转告用户。禅道登录加了验证码、单点登录等额外验证时命令行登录不了，需要管理员开一个不走这些验证的账号。证书、代理问题请用户参考 zentao16-cli README 的"兼容性与部署"。
 - 提示"没有 xxx 的访问权限"，说明账号缺这项权限；提示"您无权访问该迭代/项目"之类，说明账号缺少单据所属迭代、项目的权限。两种都请用户找禅道管理员开通。
 
 写操作被禅道拒绝时（比如团队自定义了必填字段），把禅道的提示原样告诉用户，补齐内容后重新给用户看草稿再提交，不要自己编内容去填必填项。`comment` 报没有 action-comment 权限时，如果备注本来就要随转交一起写（比如转给后端排查），可以改用 `zentao assign` 在指派时写备注，但转给谁要由用户确认。
