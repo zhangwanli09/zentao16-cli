@@ -1,4 +1,4 @@
-import TurndownService from 'turndown';
+import type TurndownService from 'turndown';
 
 const NBSP = String.fromCharCode(0xa0);
 
@@ -36,35 +36,45 @@ export function extractImageSources(html: string): string[] {
 /** 当前这次转换的图片映射；turndown 是同步的，所以共享一个实例是安全的 */
 let currentImageMap = new Map<string, string>();
 
-const td = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  bulletListMarker: '-',
-  emDelimiter: '*',
-});
-// 不转义 [步骤] 这类禅道模板里常见的方括号，读起来更干净
-td.escape = (text: string) => text;
-td.remove(['script', 'style']);
-td.addRule('zentaoImage', {
-  filter: 'img',
-  replacement: (_content, node) => {
-    const el = node as HTMLElement;
-    const src = el.getAttribute('src') ?? '';
-    const target = currentImageMap.get(src) ?? src;
-    if (!target) return '';
-    const alt = el.getAttribute('alt') || el.getAttribute('title') || '截图';
-    return `![${alt}](${/\s/.test(target) ? `<${target}>` : target})`;
-  },
-});
+let td: TurndownService | undefined;
+
+/** 按需加载 turndown，不读单据的命令不必付出它的启动开销 */
+async function getTurndown(): Promise<TurndownService> {
+  if (td) return td;
+  const { default: Turndown } = await import('turndown');
+  const service = new Turndown({
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+    bulletListMarker: '-',
+    emDelimiter: '*',
+  });
+  // 不转义 [步骤] 这类禅道模板里常见的方括号，读起来更干净
+  service.escape = (text: string) => text;
+  service.remove(['script', 'style']);
+  service.addRule('zentaoImage', {
+    filter: 'img',
+    replacement: (_content, node) => {
+      const el = node as HTMLElement;
+      const src = el.getAttribute('src') ?? '';
+      const target = currentImageMap.get(src) ?? src;
+      if (!target) return '';
+      const alt = el.getAttribute('alt') || el.getAttribute('title') || '截图';
+      return `![${alt}](${/\s/.test(target) ? `<${target}>` : target})`;
+    },
+  });
+  return (td = service);
+}
 
 /** 禅道富文本 → Markdown，imageMap 把图片原始 src 替换成本地路径 */
-export function htmlToMarkdown(html: string | undefined, imageMap: Map<string, string> = new Map()): string {
+export async function htmlToMarkdown(html: string | undefined, imageMap: Map<string, string> = new Map()): Promise<string> {
   if (!html?.trim()) return '';
   if (!/<[a-z][\s\S]*?>/i.test(html)) return html.trim();
 
+  const service = await getTurndown();
+  // 从这里到 finally 都是同步执行，不会和其他转换交错
   currentImageMap = imageMap;
   try {
-    return td
+    return service
       .turndown(html)
       .split(NBSP)
       .join(' ')
