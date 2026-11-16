@@ -39,6 +39,11 @@ interface RawCommon {
 }
 
 export interface RawBug extends RawCommon {
+  branch?: Id;
+  project?: Id;
+  execution?: Id;
+  plan?: Id;
+  color?: string;
   title?: string;
   severity?: Id;
   type?: string;
@@ -48,6 +53,15 @@ export interface RawBug extends RawCommon {
   resolution?: string;
   resolvedBy?: string;
   resolvedBuild?: string;
+  resolvedDate?: string;
+  closedBy?: string;
+  closedDate?: string;
+  duplicateBug?: Id;
+  lastEditedDate?: string;
+  mailto?: string;
+  feedbackBy?: string;
+  notifyEmail?: string;
+  testtask?: Id;
   story?: Id;
   storyTitle?: string;
   task?: Id;
