@@ -103,7 +103,7 @@ const EDIT_FORM_FIELDS = [
   'testtask', 'case',
 ] as const satisfies readonly (keyof RawBug)[];
 
-export async function editBug(client: WriteClient, id: number, opts: EditBugOptions) {
+function validateBugEdit(opts: EditBugOptions) {
   const fields = EDIT_FIELDS.filter((field) => opts[field] !== undefined);
   if (!fields.length && opts.comment === undefined) throw new ZentaoError('请指定要编辑的字段，或用 --message / --file 提供备注');
   if (opts.title !== undefined && !opts.title.trim()) throw new ZentaoError('Bug 标题不能为空');
@@ -123,6 +123,26 @@ export async function editBug(client: WriteClient, id: number, opts: EditBugOpti
       throw new ZentaoError('截止日期必须是有效的 YYYY-MM-DD，空字符串表示清除');
     }
   }
+  return fields;
+}
+
+function buildBugEditForm(bug: RawBug, comment: string): Record<string, string> {
+  const missing = EDIT_REQUIRED_ORIGINALS.filter((field) => bug[field] === undefined || bug[field] === null);
+  if (missing.length) throw new ZentaoError(`编辑表单缺少原始字段（${missing.join('、')}），已停止提交以免覆盖数据`);
+  const form: Record<string, string> = { comment };
+  // 正文不在 EDIT_FORM_FIELDS 中，未修改时不回传，保留原始富文本与附件引用。
+  for (const field of EDIT_FORM_FIELDS) {
+    // 禅道 fixer 会对普通字段 htmlspecialchars；还原一次，防止 &amp; 等被重复编码。
+    if (bug[field] !== undefined) form[field] = decodeAttr(String(bug[field]));
+  }
+  for (const field of ['resolvedDate', 'closedDate'] as const) {
+    if (form[field].startsWith('0000-00-00')) form[field] = '';
+  }
+  return form;
+}
+
+export async function editBug(client: WriteClient, id: number, opts: EditBugOptions) {
+  const fields = validateBugEdit(opts);
   const comment = await commentHtml(opts.comment);
   if (!fields.length) {
     // 16.5 bug::edit($bugID, $comment = false)：comment=1 时只创建备注，跳过字段更新和附件上传。
@@ -140,39 +160,35 @@ export async function editBug(client: WriteClient, id: number, opts: EditBugOpti
   const view = await client.view<RawView>(route);
   const bug = view.bug;
   if (!bug) throw new ZentaoError(`无法读取 Bug #${id} 的编辑表单，请检查单据和编辑权限`);
-  const missing = EDIT_REQUIRED_ORIGINALS.filter((field) => bug[field] === undefined || bug[field] === null);
-  if (missing.length) throw new ZentaoError(`编辑表单缺少原始字段（${missing.join('、')}），已停止提交以免覆盖数据`);
-  const form: Record<string, string> = { comment };
-  for (const field of EDIT_FORM_FIELDS) {
-    // 禅道 fixer 会对普通字段 htmlspecialchars；还原一次，防止 &amp; 等被重复编码。
-    if (bug[field] !== undefined) form[field] = decodeAttr(String(bug[field]));
-  }
-  for (const field of ['resolvedDate', 'closedDate'] as const) {
-    if (form[field].startsWith('0000-00-00')) form[field] = '';
-  }
+  const form = buildBugEditForm(bug, comment);
   for (const field of fields) form[field] = String(opts[field]);
   if (opts.steps !== undefined) {
     const { marked } = await import('marked');
     form.steps = await marked.parse(opts.steps, { gfm: true, breaks: true });
   }
-  // 未改正文时不回传，保留原始富文本与附件引用。
   if (opts.deadline === '') form.deadline = '0000-00-00';
   const before = actionIds(view);
   await client.post(route, form);
 
   const after = await client.view<RawView>(route);
-  if (!after.bug) throw new ZentaoError('提交后无法读取 Bug，请到禅道页面确认');
+  const updatedBug = after.bug;
+  if (!updatedBug) throw new ZentaoError('提交后无法读取 Bug，请到禅道页面确认');
   const mismatch = fields.filter((field) => {
     if (field === 'steps') return false; // 服务端会过滤、规范化 HTML，用字段历史确认正文修改。
-    const actual = decodeAttr(String(after.bug![field] ?? ''));
-    return field === 'deadline' && !opts.deadline ? actual !== '' && !actual.startsWith('0000-00-00') : actual !== form[field];
+    const actual = decodeAttr(String(updatedBug[field] ?? ''));
+    if (field === 'deadline' && !opts.deadline) return actual !== '' && !actual.startsWith('0000-00-00');
+    return actual !== form[field];
   });
   const added = newActions(before, after);
-  if (opts.steps !== undefined && after.bug.steps !== form.steps) {
-    const changed = after.bug.steps !== bug.steps && added.some((a) => a.history?.some((h) => h.field === 'steps'));
-    if (!changed && await htmlToMarkdown(after.bug.steps) !== await htmlToMarkdown(form.steps)) mismatch.push('steps');
+  if (opts.steps !== undefined && updatedBug.steps !== form.steps) {
+    const recordedChange = updatedBug.steps !== bug.steps && added.some((a) => a.history?.some((h) => h.field === 'steps'));
+    if (!recordedChange) {
+      const savedMarkdown = await htmlToMarkdown(updatedBug.steps);
+      const submittedMarkdown = await htmlToMarkdown(form.steps);
+      if (savedMarkdown !== submittedMarkdown) mismatch.push('steps');
+    }
   }
-  if (after.bug.status !== bug.status) throw new ZentaoError('提交后 Bug 状态发生变化，请到禅道页面确认');
+  if (updatedBug.status !== bug.status) throw new ZentaoError('提交后 Bug 状态发生变化，请到禅道页面确认');
   if (mismatch.length) throw new ZentaoError(`提交后字段未按预期保存（${mismatch.join('、')}），请到禅道页面确认`);
   if (comment && !added.some((a) => a.comment)) throw new ZentaoError('已编辑，但历史记录中没有找到新备注，请到禅道页面确认');
   return { id, fields, url: ticketUrl(client, 'bug', id) };
