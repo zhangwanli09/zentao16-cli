@@ -6,6 +6,7 @@
  * - 部分页面在 JSON 后追加 <script>
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFile } from 'node:child_process';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,7 @@ process.env.ZENTAO_HOME = home;
 
 const { ZentaoClient } = await import('../src/client.js');
 const { fetchTicket, listMine } = await import('../src/ticket.js');
-const { addComment, assignBug, resolveBug } = await import('../src/actions.js');
+const { addComment, assignBug, editBug, resolveBug } = await import('../src/actions.js');
 const { ExitCode, ZentaoError } = await import('../src/errors.js');
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
@@ -35,6 +36,9 @@ class FakeZentao {
   /** 退回旧接口 my-bug 的次数 */
   myBugCalls = 0;
   view = structuredClone(fixture);
+  editForm?: URLSearchParams;
+  editConflict = false;
+  denyComment = false;
   private seq = 0;
 
   private addAction(action: string, comment: string | null, extra = '') {
@@ -98,6 +102,41 @@ class FakeZentao {
       if (args[0] !== '101') return res.end(legacy({ result: 'fail', message: '抱歉，您访问的对象不存在！' }));
       return res.end(legacy(this.view) + TRAILING_SCRIPT);
     }
+    if (route === 'bug-edit') {
+      if (args[0] !== '101') return res.end(legacy({ result: 'fail', message: '对象不存在' }));
+      const defaults = {
+        branch: '0', project: '10', execution: '20', plan: '30', duplicateBug: '0',
+        resolvedBy: '', resolvedDate: '', resolvedBuild: '', closedBy: '', closedDate: '',
+        linkBug: '102,103', mailto: 'tester1,dev1', lastEditedDate: '2026-11-16 12:00:00',
+      };
+      const original = { ...defaults, ...this.view.bug };
+      if (req.method !== 'POST') return res.end(legacy({ ...this.view, bug: original }));
+      this.editForm = body;
+      if (args[1] === '1') {
+        this.addAction('commented', body.get('comment'));
+        return res.end('<script>parent.location="/zentao/bug-view-101.html"</script>');
+      }
+      if (this.editConflict || body.get('lastEditedDate') !== original.lastEditedDate) {
+        return res.end('<script>alert("该记录已被他人修改，请重新编辑")</script>');
+      }
+      // 16.5 model::update 的默认值和状态推导；缺少这些字段的部分更新会破坏原值。
+      const updated = { ...original, ...Object.fromEntries(body) };
+      for (const key of ['product', 'module', 'execution', 'story', 'task', 'duplicateBug', 'branch', 'plan']) {
+        updated[key] = body.get(key) || '0';
+      }
+      updated.openedBuild = body.get('openedBuild') || '';
+      updated.deadline = body.get('deadline') || '0000-00-00';
+      updated.linkBug = body.get('linkBug') || '';
+      updated.resolvedDate = body.get('resolvedDate') || '';
+      updated.status = body.get('resolution') || body.get('resolvedDate') ? 'resolved' : 'active';
+      if (body.get('closedBy') || body.get('closedDate')) updated.status = 'closed';
+      delete updated.comment;
+      this.view.bug = updated;
+      this.addAction('edited', body.get('comment'));
+      const action = Object.values(this.view.actions).at(-1) as { history: unknown[] };
+      action.history = body.has('steps') ? [{ field: 'steps', old: original.steps, new: body.get('steps') }] : [];
+      return res.end('<script>parent.location="/zentao/bug-view-101.html"</script>');
+    }
     if (route === 'my-work' || route === 'my-bug') {
       // 和真实环境一样，pager 回显实际生效的每页条数，没传或传 0 时为默认的 20
       let recPerPage = 20;
@@ -114,6 +153,7 @@ class FakeZentao {
       return res.end(PNG);
     }
     if (route === 'action-comment' && req.method === 'POST') {
+      if (this.denyComment) return res.end("<script>self.location='/zentao/user-deny-action-comment.html'</script>");
       if (!body.has('actioncomment')) return res.end("<script>parent.location.reload()</script>");
       this.addAction('commented', body.get('actioncomment'));
       return res.end("<script>parent.location.reload()</script>");
@@ -138,6 +178,16 @@ let server: Server;
 let fake: FakeZentao;
 let url: string;
 const config = () => ({ url, account: 'dev1', password: 'secret' });
+
+function runCli(args: string[], input = '') {
+  return new Promise<{ code: string | number; stdout: string; stderr: string }>((resolve) => {
+    const child = execFile(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...args], {
+      env: { ...process.env, ZENTAO_URL: url, ZENTAO_ACCOUNT: 'dev1', ZENTAO_PASSWORD: 'secret', ZENTAO_HOME: home, ZENTAO_READONLY: '0' },
+      timeout: 15000,
+    }, (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stdout, stderr }));
+    child.stdin!.end(input);
+  });
+}
 
 beforeAll(async () => {
   fake = new FakeZentao();
@@ -251,8 +301,80 @@ describe('与模拟禅道（PATH_INFO）的完整链路', () => {
     const ro = new ZentaoClient({ ...config(), readonly: true });
     const before = Object.keys(fake.view.actions).length;
     await expect(addComment(ro, 'bug', 101, '不应写入')).rejects.toThrow(/只读模式/);
+    await expect(editBug(ro, 101, { title: '不应写入' })).rejects.toThrow(/只读模式/);
+    await expect(editBug(ro, 101, { comment: '不应写入' })).rejects.toThrow(/只读模式/);
     await expect(ro.view({ m: 'bug', f: 'view', args: [['bugID', 101]] }, { unsafe: true })).rejects.toThrow(/只读模式/);
     expect(Object.keys(fake.view.actions).length).toBe(before);
+  });
+
+  it('edit CLI 从标准输入读取 Markdown 正文，支持 JSON 输出和附加备注', async () => {
+    const result = await runCli(['edit', '101', '--steps-file', '-', '--pri', '2', '-m', '补充步骤', '--json'], '1. 打开登录页\n2. 点击验证码');
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ id: 101, fields: ['steps', 'pri'] });
+    expect(fake.editForm!.get('steps')).toContain('<ol>');
+    expect(fake.editForm!.get('comment')).toContain('补充步骤');
+    expect(fake.editForm!.get('story')).toBe('45');
+    expect(fake.editForm!.get('openedBuild')).toBe('7,trunk');
+    expect(fake.view.bug.status).toBe('resolved');
+    expect(fake.view.bug.resolution).toBe('fixed');
+  });
+
+  it('edit CLI 支持文字正文和文件备注', async () => {
+    const result = await runCli(['edit', '101', '--steps', '新复现步骤', '-f', '-', '--severity', '1'], '已核实');
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain('已编辑');
+    expect(fake.editForm!.get('steps')).toContain('新复现步骤');
+    expect(fake.editForm!.get('comment')).toContain('已核实');
+  });
+
+  it.each([
+    { args: ['-m', '**补充说明**'], input: '', html: '<strong>补充说明</strong>', json: false },
+    { args: ['-f', '-', '--json'], input: '**补充说明**', html: '<strong>补充说明</strong>', json: true },
+    { args: ['-f', 'test/fixtures/bug-view.json'], input: '', html: '登录页验证码不刷新', json: false },
+  ])('无 action-comment 权限时 edit CLI 可仅追加备注：$args', async ({ args, input, html, json }) => {
+    fake.denyComment = true;
+    const before = structuredClone(fake.view.bug);
+    const historyCount = Object.keys(fake.view.actions).length;
+    try {
+      await expect(addComment(new ZentaoClient(config()), 'bug', 101, '无权限')).rejects.toThrow(/action-comment/);
+      expect(Object.keys(fake.view.actions)).toHaveLength(historyCount);
+      const result = await runCli(['edit', '101', ...args], input);
+      expect(result.code, result.stderr).toBe(0);
+      if (json) expect(JSON.parse(result.stdout)).toMatchObject({ id: 101, fields: [] });
+      else expect(result.stdout).toContain('已追加备注');
+      expect([...fake.editForm!.keys()]).toEqual(['comment']);
+      expect(fake.editForm!.get('comment')).toContain(html);
+      expect(fake.view.bug).toEqual(before);
+      const added = Object.values(fake.view.actions).at(-1);
+      expect(added).toMatchObject({ action: 'commented', comment: expect.stringContaining(html) });
+    } finally {
+      fake.denyComment = false;
+    }
+  });
+
+  it.each([
+    ['--steps', '正文', '--steps-file', '-'],
+    ['--steps-file', '-', '-f', '-'],
+    ['--title', '新标题', '-m', '备注', '-f', '-'],
+    ['--pri', '5'], ['--severity', '0'], ['-m', ' '], [],
+  ])('edit CLI 拒绝冲突/无效输入 %j，不提交', async (...args) => {
+    const before = fake.editForm;
+    const result = await runCli(['edit', '101', ...args], '文本');
+    expect(result.code).not.toBe(0);
+    expect(fake.editForm).toBe(before);
+  });
+
+  it('edit CLI 将服务端并发修改错误报告为失败', async () => {
+    fake.editConflict = true;
+    const title = fake.view.bug.title;
+    try {
+      const result = await runCli(['edit', '101', '--title', '并发修改']);
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('他人修改');
+      expect(fake.view.bug.title).toBe(title);
+    } finally {
+      fake.editConflict = false;
+    }
   });
 
   it('重新登录后仍被跳到 showErrorNone 时报权限问题而不是会话失效', async () => {

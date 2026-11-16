@@ -15,8 +15,13 @@ description: 通过 zentao 命令行（zentao16-cli）读写禅道开源版 16.x
 | `zentao bug <id>` / `zentao story <id>` / `zentao task <id>` | 单据详情（Markdown），图片和附件已下载到 `.zentao/<type>-<id>/` |
 | `zentao my -t bug\|story\|task [-s active]` | 指派给当前账号的单据 |
 | `zentao comment <type> <id> -f -` | 追加备注（写操作） |
+| `zentao edit <id> [字段选项] [-m <备注>\|-f <文件>]` | 编辑 Bug 或仅追加备注（写操作），至少指定一个字段或提供备注；使用 `bug-edit` 权限，无需 `action-comment` 权限 |
 | `zentao assign <id> -u <账号或姓名> [-f -]` | 指派 Bug，可同时写备注（写操作） |
 | `zentao resolve <id> -r fixed -b trunk [-a <账号>] -f -` | 解决 Bug（写操作，只能解决激活状态的 Bug），默认指派回提出人。`-a` 可改指派人，但只接受账号（不认姓名，也不校验账号是否存在），账号要由用户确认。`-r` 可选 fixed/bydesign/duplicate/external/notrepro/postponed/willnotfix/tostory，`duplicate` 要同时用 `--duplicate <bugId>` 指定重复的 Bug，团队在禅道里自定义的解决方案代码要加 `--custom` |
+
+`edit` 字段选项：`--title <标题>`、`--steps <Markdown>` / `--steps-file <文件或->`、`--pri <0–4>`（0 为未设置）、`--severity <1–4>`、`--type <代码>`、`--os <代码>`、`--browser <代码>`、`--keywords <文本>`、`--deadline <YYYY-MM-DD>`。类型默认支持 codeerror/config/install/security/performance/standard/automation/designdefect/others，自定义类型加 `--custom`。操作系统和浏览器使用禅道内部代码，如 windows、linux、chrome、firefox；修改前先确认代码。环境、关键词、截止日期可传空字符串清除。标题和重现步骤不能为空。`--steps` 与 `--steps-file` 二选一，会替换整段重现步骤，编辑前必须读原单并保留仍需使用的图片、附件引用；不要把梳理草稿直接覆盖原正文。`-m` / `-f` 用于追加备注，可单独使用；正文与备注不能同时用标准输入。仅追加备注会跳过字段更新，保留原有字段、关联和状态，并回读确认新备注。需要 `bug-edit` 权限，受只读模式限制；并发修改报错后重新读取、核对，不要直接重试提交。
+
+Bug 追加备注时，已知账号没有 `action-comment` 权限可直接用 `zentao edit <id> -f -`，不必先尝试 `comment`；`comment bug` 明确因权限拒绝时，也可改用这个命令提交已获用户同意的同一份备注。不要为了备注而改变指派人或其他字段。需求、任务仍用 `zentao comment`。写入结果不确定时先核对历史记录，避免重复提交。
 
 任何命令加 `--json` 可以得到结构化输出。不要用 `zentao raw`：它是给人调试用的，禅道部分 GET 请求也会改数据。退出码：`1` 一般错误，`2` 单据不存在，`3` 认证、权限或配置问题。找不到命令、退出码 `3`、写操作报错（被拒绝、缺权限、提示"请到禅道页面确认"）、提示只读模式时，先读 `references/troubleshooting.md` 再处理，不要直接重试写操作。
 
@@ -34,7 +39,7 @@ EOF
 
 **单据类型只是入口，内容决定怎么处理。** 产品常把新需求、体验优化、文案调整直接提成 Bug，所以 Bug 列表里不全是缺陷。每张单子先判断实质是缺陷还是需求（流程一第 3 步），之后选模板、开工条件、澄清问题、回写措辞都按实质类型走。不要擅自改动或转换禅道里的单子类型。
 
-**写回禅道前，先给用户看草稿并得到明确同意。** 备注和状态变更会立即通知提单人和相关同事，也撤不回。用户只说"处理 bug 123"，不算同意写回。
+**写回禅道前，先给用户看草稿并得到明确同意。** 编辑、备注和状态变更会立即通知提单人和相关同事，也撤不回。编辑时展示具体字段与新内容，覆盖重现步骤时展示完整替换正文。用户只说"处理 bug 123"，不算同意写回。
 
 ## 流程一：梳理单据
 

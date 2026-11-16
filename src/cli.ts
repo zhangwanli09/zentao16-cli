@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { Argument, Command, InvalidArgumentError, Option } from 'commander';
-import { addComment, assignBug, resolveBug, type ResolveOptions } from './actions.js';
+import { addComment, assignBug, editBug, resolveBug, type EditBugOptions, type ResolveOptions } from './actions.js';
 import { ZentaoClient } from './client.js';
 import { loadConfig, loadRepoMap } from './config.js';
 import { ExitCode, ZentaoError } from './errors.js';
@@ -103,6 +103,44 @@ program
   .action(async (id: number, opts: { user: string; message?: string; file?: string }, cmd: Command) => {
     const result = await assignBug(client(), id, opts.user, readText(opts, false));
     output(cmd, result, () => `Bug #${result.id} 已指派给 ${result.assignedName}(${result.assignedTo})：${result.url}`);
+  });
+
+program
+  .command('edit')
+  .description('编辑 Bug 或仅追加备注（写操作，需要 bug-edit 权限）')
+  .addArgument(idArgument())
+  .option('--title <text>', 'Bug 标题')
+  .option('--steps <text>', '重现步骤（Markdown，替换整段正文）')
+  .option('--steps-file <path>', '从文件读取重现步骤，- 表示标准输入')
+  .addOption(new Option('--pri <level>', '优先级（0–4，0 表示未设置）').choices(['0', '1', '2', '3', '4']))
+  .addOption(new Option('--severity <level>', '严重程度（1–4）').choices(['1', '2', '3', '4']))
+  .option('--type <code>', 'Bug 类型代码，如 codeerror、performance', parseCode)
+  .option('--custom', '允许使用禅道里自定义的 Bug 类型代码')
+  .option('--os <code>', '操作系统代码，如 windows、linux，空字符串清除')
+  .option('--browser <code>', '浏览器代码，如 chrome、firefox，空字符串清除')
+  .option('--keywords <text>', '关键词，空字符串清除')
+  .option('--deadline <date>', '截止日期 YYYY-MM-DD，空字符串清除')
+  .option('-m, --message <text>', '追加备注（Markdown），可单独使用')
+  .option('-f, --file <path>', '从文件读取备注，可单独使用，- 表示标准输入')
+  .action(async (
+    id: number,
+    opts: Omit<EditBugOptions, 'pri' | 'severity' | 'comment'> & {
+      pri?: string; severity?: string; stepsFile?: string; message?: string; file?: string;
+    },
+    cmd: Command,
+  ) => {
+    if (opts.steps !== undefined && opts.stepsFile !== undefined) throw new ZentaoError('--steps 和 --steps-file 只能二选一');
+    if (opts.stepsFile === '-' && opts.file === '-') throw new ZentaoError('重现步骤和备注不能同时从标准输入读取');
+    const steps = opts.stepsFile !== undefined ? readFileSync(opts.stepsFile === '-' ? 0 : opts.stepsFile, 'utf8') : opts.steps;
+    const result = await editBug(client(), id, {
+      ...opts, steps,
+      pri: opts.pri === undefined ? undefined : Number(opts.pri),
+      severity: opts.severity === undefined ? undefined : Number(opts.severity),
+      comment: readText(opts, false),
+    });
+    output(cmd, result, () => result.fields.length
+      ? `Bug #${result.id} 已编辑（${result.fields.join('、')}）：${result.url}`
+      : `Bug #${result.id} 已追加备注：${result.url}`);
   });
 
 program
